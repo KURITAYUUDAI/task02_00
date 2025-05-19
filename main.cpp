@@ -639,10 +639,25 @@ Vector3 Project(const Vector3& v1, const Vector3& v2)
 Vector3 ClosestPoint(const Vector3& point, const Segment& segment)
 {
 
-
 	Vector3 projBA = Project(Subtract(point, segment.origin), segment.diff);
 	
 	return Add(segment.origin, projBA);
+}
+
+// 球の当たり判定を求める関数
+bool IsCollision(const Sphere& sphere1, const Sphere& sphere2)
+{
+	// 2つの球の中心点間の距離を求める
+	float distance = Length(Subtract(sphere2.center, sphere1.center));
+	// 半径の合計よりも短ければ衝突
+	if (distance <= sphere1.radius + sphere2.radius)
+	{
+		return true;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 // Windowsアプリでのエントリーポイント(main関数)
@@ -672,9 +687,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 start;
 	Vector3 end;
 
-	Vector3 cameraPos{ 0.0f, 1.9f, -6.49f };
+	Vector3 cameraPos{ 0.0f, 0.0f, 0.0f };
+	Vector3 cameraSize{ 1.0f, 1.0f, 1.0f };
 	Vector3 cameraRotate{ 0.26f, 0.0f, 0.0f };
-	Vector3 cameraTranslate{ 0.0f, 0.0f, 0.0f };
+	Vector3 cameraTranslate{ 0.0f, 1.9f, -6.49f };
 
 
 	Matrix4x4 cameraMatrix;
@@ -698,14 +714,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("CameraTranslate", &cameraPos.x, 0.01f);
+		ImGui::DragFloat3("CameraTranslate", &cameraTranslate.x, 0.01f);
 		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
 		ImGui::InputFloat3("Project", &project.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::End();
 
-		cameraTranslate = cameraPos;
-
-		cameraMatrix = MakeAffineMatrixFPS({ 1.0f, 1.0f, 1.0f }, cameraRotate, cameraTranslate);
+		cameraMatrix = MakeAffineMatrixFPS(cameraSize, cameraRotate, cameraTranslate);
 		viewMatrix = Inverse(cameraMatrix);
 		projectionMatrix = MakePerspectiveFovMatrix(0.45f, static_cast<float>(kWindowWidth) / static_cast<float>(kWindowHeight), 0.1f, 100.0f);
 		// VPMatrixを作成
@@ -732,6 +746,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		DrawSphere(pointSphere, viewProjectionMatrix, viewportMatrix, RED);
 		DrawSphere(closestPointSphere, viewProjectionMatrix, viewportMatrix, BLACK);
+
 
 		///
 		/// ↑描画処理ここまで
