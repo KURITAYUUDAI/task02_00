@@ -5,10 +5,13 @@
 #include <assert.h>
 #include <imgui.h>
 
+#include <algorithm>
+
 const char kWindowTitle[] = "LE2B_07_クリタ_ユウダイ_タイトル";
 
 const int kWindowWidth = 1280;
 const int kWindowHeight = 720;
+
 
 struct Vector3
 {
@@ -660,6 +663,21 @@ bool IsCollision(const Sphere& sphere1, const Sphere& sphere2)
 	}
 }
 
+Matrix4x4 MakeLookAtMatrix(const Vector3& eye, const Vector3& target, const Vector3& up)
+{
+	Vector3 zAxis = Normalize(Subtract(target, eye));   // 前方向
+	Vector3 xAxis = Normalize(Cross(up, zAxis));         // 右方向
+	Vector3 yAxis = Cross(zAxis, xAxis);                 // 上方向
+
+	Matrix4x4 view{};
+	view.m[0][0] = xAxis.x; view.m[0][1] = yAxis.x; view.m[0][2] = zAxis.x; view.m[0][3] = 0.0f;
+	view.m[1][0] = xAxis.y; view.m[1][1] = yAxis.y; view.m[1][2] = zAxis.y; view.m[1][3] = 0.0f;
+	view.m[2][0] = xAxis.z; view.m[2][1] = yAxis.z; view.m[2][2] = zAxis.z; view.m[2][3] = 0.0f;
+	view.m[3][0] = -Dot(xAxis, eye); view.m[3][1] = -Dot(yAxis, eye); view.m[3][2] = -Dot(zAxis, eye); view.m[3][3] = 1.0f;
+	return view;
+}
+
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -681,11 +699,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	// 球の描画
 
-	Sphere pointSphere{ point, 0.01f };
-	Sphere closestPointSphere{ closestPoint, 0.01f };
+	Sphere sphereA;
+	sphereA.center = { 0.0f, 0.0f, 0.0f };
+	sphereA.radius = 1.0f;
+	
+	Sphere sphereB;
+	sphereB.center = { 3.0f, 3.0f, 0.0f };
+	sphereB.radius = 1.0f;
 
-	Vector3 start;
-	Vector3 end;
+	
+	
 
 	Vector3 cameraPos{ 0.0f, 0.0f, 0.0f };
 	Vector3 cameraSize{ 1.0f, 1.0f, 1.0f };
@@ -693,11 +716,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	Vector3 cameraTranslate{ 0.0f, 1.9f, -6.49f };
 
 
-	Matrix4x4 cameraMatrix;
+	/*Matrix4x4 cameraMatrix;*/
 	Matrix4x4 viewMatrix;
 	Matrix4x4 projectionMatrix;
 	Matrix4x4 viewportMatrix;
 
+	// main関数の直前あたりに追加
+	
+	float radius = 6.0f;    // 原点からの距離
+	const float rotationSpeed = 0.005f; // ドラッグ速度の調整係数
+
+	float theta = 0.0f;
+	float phi = 0.0f;
+
+	// マウス座標を取得
+	int mouseX, mouseY;
 
 
 	// ウィンドウの×ボタンが押されるまでループ
@@ -709,18 +742,61 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		memcpy(preKeys, keys, 256);
 		Novice::GetHitKeyStateAll(keys);
 
+		Novice::GetMousePosition(&mouseX, &mouseY);
+
 		///
 		/// ↓更新処理ここから
 		///
 
+		if (Novice::IsPressMouse(2) && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow))
+		{
+			// ウィンドウ上ではない領域でのドラッグ
+			ImVec2 delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle, 0.0f);
+
+			// カメラ角度に反映
+			phi += delta.x * rotationSpeed;
+			theta += delta.y * rotationSpeed;
+
+			if (phi > static_cast<float>(M_PI))
+			{
+				phi = phi - 2.0f * static_cast<float>(M_PI);
+			}
+			else if (phi < -static_cast<float>(M_PI))
+			{
+				phi = phi + 2.0f * static_cast<float>(M_PI);
+			}
+
+			// ピッチを上下90°未満にクランプ
+			const float limit = 0.47f * static_cast<float>(M_PI); // 約85°
+			theta = std::clamp(theta, -limit, limit);
+			
+			ImGui::ResetMouseDragDelta(ImGuiMouseButton_Middle);
+		}
+
+		int wheel = Novice::GetWheel(); // 前フレームとの差分
+		radius -= wheel * 0.005f;              // 感度は 0.1f などで調整
+		radius = max(1.0f, min(radius, 20.0f)); // クランプして近づきすぎ防止
+
+		cameraRotate.x = phi;
+		cameraRotate.y = theta;
+
+		cameraTranslate.x = radius * std::cos(theta) * std::sin(phi);
+		cameraTranslate.y = radius * std::sin(theta);
+		cameraTranslate.z = radius * std::cos(theta) * std::cos(phi);
+
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("CameraTranslate", &cameraTranslate.x, 0.01f);
-		ImGui::DragFloat3("CameraRotate", &cameraRotate.x, 0.01f);
-		ImGui::InputFloat3("Project", &project.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
+		ImGui::DragFloat3("SphereA_pos", &sphereA.center.x, 0.01f);
+		ImGui::DragFloat("SphereA_radius", &sphereA.radius, 0.01f);
+		ImGui::DragFloat3("SphereB_pos", &sphereB.center.x, 0.01f);
+		ImGui::DragFloat("SphereB_radius", &sphereB.radius, 0.01f);
+		ImGui::InputFloat3("CameraRotate", &cameraRotate.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::End();
 
-		cameraMatrix = MakeAffineMatrixFPS(cameraSize, cameraRotate, cameraTranslate);
-		viewMatrix = Inverse(cameraMatrix);
+		// ビュー行列を生成
+			
+		
+		viewMatrix = MakeLookAtMatrix(cameraTranslate, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
+
 		projectionMatrix = MakePerspectiveFovMatrix(0.45f, static_cast<float>(kWindowWidth) / static_cast<float>(kWindowHeight), 0.1f, 100.0f);
 		// VPMatrixを作成
 		Matrix4x4 viewProjectionMatrix = Multiply(viewMatrix, projectionMatrix);
@@ -740,12 +816,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
-		start = Transform(Transform(segment.origin, viewProjectionMatrix), viewportMatrix);
-		end = Transform(Transform(Add(segment.origin, segment.diff), viewProjectionMatrix), viewportMatrix);
-		Novice::DrawLine(int(start.x), int(start.y), int(end.x), int(end.y), WHITE);
-
-		DrawSphere(pointSphere, viewProjectionMatrix, viewportMatrix, RED);
-		DrawSphere(closestPointSphere, viewProjectionMatrix, viewportMatrix, BLACK);
+		
+		if (IsCollision(sphereA, sphereB) == true)
+		{
+			DrawSphere(sphereA, viewProjectionMatrix, viewportMatrix, RED);
+		}
+		else
+		{
+			DrawSphere(sphereA, viewProjectionMatrix, viewportMatrix, WHITE);
+		}
+		
+		DrawSphere(sphereB, viewProjectionMatrix, viewportMatrix, WHITE);
 
 
 		///
