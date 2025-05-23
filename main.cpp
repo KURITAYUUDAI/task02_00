@@ -648,7 +648,7 @@ Vector3 ClosestPoint(const Vector3& point, const Segment& segment)
 }
 
 // 球の当たり判定を求める関数
-bool IsCollisionSphere(const Sphere& sphere1, const Sphere& sphere2)
+bool IsCollision(const Sphere& sphere1, const Sphere& sphere2)
 {
 	// 2つの球の中心点間の距離を求める
 	float distance = Length(Subtract(sphere2.center, sphere1.center));
@@ -683,7 +683,7 @@ struct Plane
 	float distance;	//!< 距離
 };
 
-bool IsCollisionPlane(const Sphere& sphere, const Plane& plane)
+bool IsCollision(const Sphere& sphere, const Plane& plane)
 {
 	// 平面と球の中心点間の距離を求める
 	float distance = Dot(plane.normal, sphere.center) - plane.distance;
@@ -924,7 +924,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
 		
-		if (IsCollisionPlane(sphere, plane))
+		if (IsCollision(sphere, plane))
 		{
 			DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, RED);
 		}
