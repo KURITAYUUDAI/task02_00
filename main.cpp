@@ -778,11 +778,76 @@ void DrawPlane(const Plane& plane, const Matrix4x4& viewProjectionMatrix, const 
 			static_cast<int>(points[index].x), static_cast<int>(points[index].y),
 			static_cast<int>(points[(index + 1) % 4].x), static_cast<int>(points[(index + 1) % 4].y), color);
 
+	}	
+}
+
+bool IsCollision(const Plane& plane, const Line& line)
+{
+	// 法線と線の内積を求める
+	float dot = Dot(plane.normal, line.diff);
+	// 内積が0であれば平行
+	if (dot == 0.0f)
+	{
+		return false;
+	}
+	
+	// 平行でなければ直線はどこかで衝突する
+	return true;
+}
+
+bool IsCollision(const Plane& plane, const Ray& ray)
+{
+	// 法線と線の内積を求める
+	float dot = Dot(plane.normal, ray.diff);
+	// 内積が0であれば平行
+	if (dot == 0.0f)
+	{
+		return false;
 	}
 
-	
-		
+	// tを求める
+	float t = (plane.distance - Dot(ray.origin, plane.normal)) / dot;
+
+	// tが0未満であれば半直線は衝突しない
+	if (t < 0.0f)
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
 }
+
+// 線分と平面の衝突判定を求める関数
+bool IsCollision(const Plane& plane, const Segment& segment)
+{
+	// 法線と線の内積を求める
+	float dot = Dot(plane.normal, segment.diff);
+
+	// 内積が0であれば平行
+	if (dot == 0.0f)
+	{
+		return false;
+	}
+
+	// tを求める
+	float t = (plane.distance - Dot(segment.origin, plane.normal)) / dot;
+
+	// tが0未満または1より大きければ線分は衝突しない
+	if (t < 0.0f || t > 1.0f)
+	{
+		return false;
+	}
+	else
+	{
+		return true;
+	}
+}
+
+
+
+
 
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
@@ -794,20 +859,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	char keys[256] = { 0 };
 	char preKeys[256] = { 0 };
 
-	Segment segment{ {-2.0f, -1.0f, 0.0f}, {3.0f, 2.0f, 2.0f} };
-	Vector3 point{ -1.5f, 0.6f, 0.6f };
-	// pointを線分に射影したベクトル。今回は正しく計算出来ているかを確認するためだけに使う
-	Vector3 project = Project(Subtract(point, segment.origin), segment.diff);
-
-	// この値が線分上の点を表す
-	Vector3 closestPoint = ClosestPoint(point, segment);
-
 
 	// 球の描画
 
-	Sphere sphere;
-	sphere.center = { 0.0f, 0.0f, 0.0f };
-	sphere.radius = 0.5f;
+	Segment segment;
+	segment.origin = { 1.0f, 1.0f, 1.0f };
+	segment.diff = { 0.5f, 0.5f, 0.5f };
 	
 	Plane plane;
 	plane.normal = { 0.0f, 1.0f, 0.0f };
@@ -890,10 +947,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		cameraTranslate.z = radius * std::cos(theta) * std::cos(phi);
 
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("sphere.pos", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("sphere.radius", &sphere.radius, 0.01f);
 		ImGui::DragFloat3("plane.normal", &plane.normal.x, 0.01f);
 		ImGui::DragFloat("plane.distance", &plane.distance, 0.01f);
+		ImGui::DragFloat3("segment.origin.x", &segment.origin.x, 0.01f);
+		ImGui::DragFloat3("segment.diff.x", &segment.diff.x, 0.01f);
 		ImGui::InputFloat3("CameraRotate", &cameraRotate.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::End();
 
@@ -923,18 +980,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 
-		
-		if (IsCollision(sphere, plane))
+		if (IsCollision(plane, segment) == true)
 		{
-			DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, RED);
+			
 		}
 		else
 		{
-			DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, WHITE);
+		
 		}
 		
 		DrawPlane(plane, viewProjectionMatrix, viewportMatrix, WHITE);
-		
 
 
 		///
