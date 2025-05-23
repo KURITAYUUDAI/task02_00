@@ -860,7 +860,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	char preKeys[256] = { 0 };
 
 
-	// 球の描画
+	Vector3 start = { 0.0f, 0.0f, 0.0f };
+	Vector3 end = { 0.0f, 0.0f, 0.0f };
 
 	Segment segment;
 	segment.origin = { 1.0f, 1.0f, 1.0f };
@@ -979,6 +980,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
+
+		
 
 		if (IsCollision(plane, segment) == true)
 		{
