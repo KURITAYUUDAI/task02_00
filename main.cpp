@@ -1020,6 +1020,39 @@ bool IsCollision(const AABB& aabb, const Sphere& sphere)
 	return false; // 衝突していない
 }
 
+bool IsCollision(const AABB& aabb, const Segment& segment)
+{
+	float txmin = (aabb.min.x - segment.origin.x) / segment.diff.x;
+	float txmax = (aabb.max.x - segment.origin.x) / segment.diff.x;
+	float tymin = (aabb.min.y - segment.origin.y) / segment.diff.y;
+	float tymax = (aabb.max.y - segment.origin.y) / segment.diff.y;
+	float tzmin = (aabb.min.z - segment.origin.z) / segment.diff.z;
+	float tzmax = (aabb.max.z - segment.origin.z) / segment.diff.z;
+	
+	float tNearX = min(txmin, txmax);
+	float tFarX = max(txmin, txmax);
+	float tNearY = min(tymin, tymax);
+	float tFarY = max(tymin, tymax);
+	float tNearZ = min(tzmin, tzmax);
+	float tFarZ = max(tzmin, tzmax);
+
+	// AABBとの衝突点（貫通点）のtが小さい方
+	float tmin = max(max(tNearX, tNearY), tNearZ);
+	// AABBとの衝突点（貫通点）のtが大きい方
+	float tmax = min(min(tFarX, tFarY), tFarZ);
+	if (tmin > tmax)
+	{
+		return false;
+	}
+
+	if (tmax < 0.0f || tmin > 1.0f)
+	{
+		return false;
+	}
+
+	return true;
+}
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -1032,11 +1065,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	AABB aabb;
 	aabb.min = { -0.5f, -0.5f, -0.5f };
-	aabb.max = { 0.0f, 0.0f, 0.0f };
+	aabb.max = { 0.5f, 0.5f, 0.5f };
 
-	Sphere sphere;
-	sphere.center = { 0.0f, 0.0f, 0.0f };
-	sphere.radius = 0.1f;
+	Segment segment
+	{
+		.origin{ -0.7f, 0.3f, 0.0f },
+		.diff{ 2.0f, -0.5f, 0.0f }
+	};
 
 	
 
@@ -1117,8 +1152,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::Begin("Window");
 		ImGui::DragFloat3("aabb.min", &aabb.min.x, -0.01f);
 		ImGui::DragFloat3("aabb.max", &aabb.max.x, -0.01f);
-		ImGui::DragFloat3("sphere.center", &sphere.center.x, -0.01f);
-		ImGui::DragFloat("sphere.radius", &sphere.radius, -0.01f);
+		ImGui::DragFloat3("segment.origin", &segment.origin.x, -0.01f);
+		ImGui::DragFloat3("segment.diff", &segment.diff.x, -0.01f);
 		ImGui::InputFloat3("CameraRotate", &cameraRotate.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::End();
 
@@ -1154,7 +1189,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 		
-		if (IsCollision(aabb, sphere))
+		if (IsCollision(aabb, segment))
 		{
 			DrawAABB(aabb, viewProjectionMatrix, viewportMatrix, RED);
 		}
@@ -1163,7 +1198,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			DrawAABB(aabb, viewProjectionMatrix, viewportMatrix, WHITE);
 		}
 
-		DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, WHITE);
+		DrawSegment(segment, viewProjectionMatrix, viewportMatrix, WHITE);
 
 
 		///
