@@ -924,6 +924,83 @@ void DrawSegment(const Segment& segment, const Matrix4x4& viewProjectionMatrix, 
 		static_cast<int>(end.x), static_cast<int>(end.y), color);
 }
 
+struct AABB
+{
+	Vector3 min;	//!< 最小点
+	Vector3 max;	//!< 最大点
+};
+
+bool IsCollision(const AABB& aabb1, const AABB& aabb2)
+{
+	if ((aabb1.min.x <= aabb2.max.x && aabb1.max.x >= aabb2.min.x) &&
+		(aabb1.min.y <= aabb2.max.y && aabb1.max.y >= aabb2.min.y) &&
+		(aabb1.min.z <= aabb2.max.z && aabb1.max.z >= aabb2.min.z))
+	{
+		return true; // 衝突している
+	}
+
+	return false; // 衝突していない
+}
+
+void DrawAABB(const AABB& aabb, const Matrix4x4& viewProjectionMatrix, const Matrix4x4& viewportMatrix, uint32_t color)
+{
+	Vector3 vertices[8];
+	// AABBの8頂点を計算
+	vertices[0] = { aabb.min.x, aabb.min.y, aabb.min.z };
+	vertices[1] = { aabb.max.x, aabb.min.y, aabb.min.z };
+	vertices[2] = { aabb.max.x, aabb.max.y, aabb.min.z };
+	vertices[3] = { aabb.min.x, aabb.max.y, aabb.min.z };
+	vertices[4] = { aabb.min.x, aabb.min.y, aabb.max.z };
+	vertices[5] = { aabb.max.x, aabb.min.y, aabb.max.z };
+	vertices[6] = { aabb.max.x, aabb.max.y, aabb.max.z };
+	vertices[7] = { aabb.min.x, aabb.max.y, aabb.max.z };
+	Vector3 screenVertices[8];
+	for (int32_t index = 0; index < 8; ++index)
+	{
+		screenVertices[index] = Transform(Transform(vertices[index], viewProjectionMatrix), viewportMatrix);
+	}
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[0].x), static_cast<int>(screenVertices[0].y),
+		static_cast<int>(screenVertices[1].x), static_cast<int>(screenVertices[1].y), color);
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[0].x), static_cast<int>(screenVertices[0].y),
+		static_cast<int>(screenVertices[3].x), static_cast<int>(screenVertices[3].y), color);
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[0].x), static_cast<int>(screenVertices[0].y),
+		static_cast<int>(screenVertices[4].x), static_cast<int>(screenVertices[4].y), color);
+
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[2].x), static_cast<int>(screenVertices[2].y),
+		static_cast<int>(screenVertices[1].x), static_cast<int>(screenVertices[1].y), color);
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[2].x), static_cast<int>(screenVertices[2].y),
+		static_cast<int>(screenVertices[3].x), static_cast<int>(screenVertices[3].y), color);
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[2].x), static_cast<int>(screenVertices[2].y),
+		static_cast<int>(screenVertices[6].x), static_cast<int>(screenVertices[6].y), color);
+
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[5].x), static_cast<int>(screenVertices[5].y),
+		static_cast<int>(screenVertices[1].x), static_cast<int>(screenVertices[1].y), color);
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[5].x), static_cast<int>(screenVertices[5].y),
+		static_cast<int>(screenVertices[4].x), static_cast<int>(screenVertices[4].y), color);
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[5].x), static_cast<int>(screenVertices[5].y),
+		static_cast<int>(screenVertices[6].x), static_cast<int>(screenVertices[6].y), color);
+
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[7].x), static_cast<int>(screenVertices[7].y),
+		static_cast<int>(screenVertices[3].x), static_cast<int>(screenVertices[3].y), color);
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[7].x), static_cast<int>(screenVertices[7].y),
+		static_cast<int>(screenVertices[4].x), static_cast<int>(screenVertices[4].y), color);
+	Novice::DrawLine(
+		static_cast<int>(screenVertices[7].x), static_cast<int>(screenVertices[7].y),
+		static_cast<int>(screenVertices[6].x), static_cast<int>(screenVertices[6].y), color);
+
+}
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -934,17 +1011,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	char keys[256] = { 0 };
 	char preKeys[256] = { 0 };
 
+	AABB aabb1;
+	aabb1.min = { -0.5f, -0.5f, -0.5f };
+	aabb1.max = { 0.0f, 0.0f, 0.0f };
 
-	
+	AABB aabb2;
+	aabb2.min = { 0.2f, 0.2f, 0.2f };
+	aabb2.max = { 1.0f, 1.0f, 1.0f };
 
-	Segment segment;
-	segment.origin = { 0.0f, 0.0f, 0.0f };
-	segment.diff = { 1.5f, 1.5f, 1.0f };
-	
-	Triangle triangle;
-	triangle.vertices[0] = { 2.0f, 1.0f, 1.0f };
-	triangle.vertices[1] = { 0.0f, 1.0f, 1.0f };
-	triangle.vertices[2] = { 0.0f, 1.0f, 0.0f };
 	
 
 	Vector3 cameraPos{ 0.0f, 0.0f, 0.0f };
@@ -1022,15 +1096,26 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		cameraTranslate.z = radius * std::cos(theta) * std::cos(phi);
 
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("triangle.vertices[0]", &triangle.vertices[0].x, 0.01f);
-		ImGui::DragFloat3("triangle.vertices[1]", &triangle.vertices[1].x, 0.01f);
-		ImGui::DragFloat3("triangle.vertices[2]", &triangle.vertices[2].x, 0.01f);
-		ImGui::DragFloat3("segment.origin.x", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("segment.diff.x", &segment.diff.x, 0.01f);
+		ImGui::DragFloat3("aabb1.min", &aabb1.min.x, -0.01f);
+		ImGui::DragFloat3("aabb1.max", &aabb1.max.x, -0.01f);
+		ImGui::DragFloat3("aabb2.min", &aabb2.min.x, -0.01f);
+		ImGui::DragFloat3("aabb2.max", &aabb2.max.x, -0.01f);
 		ImGui::InputFloat3("CameraRotate", &cameraRotate.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::End();
 
-		
+		aabb1.min.x = (std::min)(aabb1.min.x, aabb1.max.x);
+		aabb1.max.x = (std::max)(aabb1.min.x, aabb1.max.x);
+		aabb1.min.y = (std::min)(aabb1.min.y, aabb1.max.y);
+		aabb1.max.y = (std::max)(aabb1.min.y, aabb1.max.y);
+		aabb1.min.z = (std::min)(aabb1.min.z, aabb1.max.z);
+		aabb1.max.z = (std::max)(aabb1.min.z, aabb1.max.z);
+
+		aabb2.min.x = (std::min)(aabb2.min.x, aabb2.max.x);
+		aabb2.max.x = (std::max)(aabb2.min.x, aabb2.max.x);
+		aabb2.min.y = (std::min)(aabb2.min.y, aabb2.max.y);
+		aabb2.max.y = (std::max)(aabb2.min.y, aabb2.max.y);
+		aabb2.min.z = (std::min)(aabb2.min.z, aabb2.max.z);
+		aabb2.max.z = (std::max)(aabb2.min.z, aabb2.max.z);
 
 		// ビュー行列を生成
 			
@@ -1056,16 +1141,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 		
-		if (IsCollision(triangle, segment) == true)
+		if (IsCollision(aabb1, aabb2))
 		{
-			DrawSegment(segment, viewProjectionMatrix, viewportMatrix, RED);
+			DrawAABB(aabb1, viewProjectionMatrix, viewportMatrix, RED);
 		}
 		else
 		{
-			DrawSegment(segment, viewProjectionMatrix, viewportMatrix, WHITE);
+			DrawAABB(aabb1, viewProjectionMatrix, viewportMatrix, WHITE);
 		}
-		
-		DrawTriangle(triangle, viewProjectionMatrix, viewportMatrix, WHITE);
+
+		DrawAABB(aabb2, viewProjectionMatrix, viewportMatrix, WHITE);
 
 
 		///
