@@ -1173,6 +1173,35 @@ void DrawOBB(const OBB& obb, const Matrix4x4& viewProjectionMatrix, const Matrix
 
 }
 
+bool IsCollision(const OBB& obb, const Segment& segment)
+{
+	Matrix4x4 obbWorldMatrix =
+	{
+		obb.orientations[0].x, obb.orientations[1].x, obb.orientations[2].x, 0.0f,
+		obb.orientations[0].y, obb.orientations[1].y, obb.orientations[2].y, 0.0f,
+		obb.orientations[0].z, obb.orientations[1].z, obb.orientations[2].z, 0.0f,
+		obb.center.x,		   obb.center.y,		  obb.center.z,			 1.0f
+	};
+
+	Vector3 localOrigin = Transform(segment.origin, Inverse(obbWorldMatrix));
+	Vector3 localEnd = Transform(Add(segment.origin, segment.diff), Inverse(obbWorldMatrix));
+
+	AABB localAABB
+	{
+		.min = { -obb.size.x, -obb.size.y, -obb.size.z },
+		.max = obb.size,
+	};
+
+	Segment localSegment
+	{
+		.origin = localOrigin,
+		.diff = Subtract(localEnd, localOrigin)
+	};
+
+	return IsCollision(localAABB, localSegment);
+
+}
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -1195,10 +1224,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		.size { 0.5f, 0.5f, 0.5f }
 	};
 
-	Sphere sphere
+	Segment segment
 	{
-		.center { 0.0f, 0.0f, 0.0f },
-		.radius { 0.5f }
+		.origin{ -0.8f, -0.3f, 0.0f },
+		.diff{ 0.5f, 0.5f,0.5f }
 	};
 
 	
@@ -1304,8 +1333,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		ImGui::InputFloat3("obb.orientations[1]", &obb.orientations[1].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::InputFloat3("obb.orientations[2]", &obb.orientations[2].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::DragFloat3("obb.size", &obb.size.x, 0.01f);
-		ImGui::DragFloat3("sphere.center", &sphere.center.x, 0.01f);
-		ImGui::DragFloat("sphere.radius", &sphere.radius, 0.01f);
+		ImGui::DragFloat3("segment.origin", &segment.origin.x, 0.01f);
+		ImGui::DragFloat3("segment.diff", &segment.diff.x, 0.01f);
 		ImGui::InputFloat3("CameraRotate", &cameraRotate.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::End();
 
@@ -1336,9 +1365,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 		
-		DrawSphere(sphere, viewProjectionMatrix, viewportMatrix, WHITE);
+		DrawSegment(segment, viewProjectionMatrix, viewportMatrix, WHITE);
 
-		if (IsCollision(obb, sphere)) 
+		if (IsCollision(obb, segment)) 
 		{
 			DrawOBB(obb, viewProjectionMatrix, viewportMatrix, RED);
 		}
