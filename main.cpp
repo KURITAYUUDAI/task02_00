@@ -6,6 +6,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <vector>
 
 const char kWindowTitle[] = "LE2B_07_クリタ_ユウダイ_タイトル";
 
@@ -1202,6 +1203,115 @@ bool IsCollision(const OBB& obb, const Segment& segment)
 
 }
 
+bool IsCollision(const OBB (&obb)[2])
+{
+	Vector3 axis[15]
+	{
+		obb[0].orientations[0],	// OBB1のX軸
+		obb[0].orientations[1],	// OBB1のY軸
+		obb[0].orientations[2],	// OBB1のZ軸
+		obb[1].orientations[0],	// OBB2のX軸
+		obb[1].orientations[1],	// OBB2のY軸
+		obb[1].orientations[2],	// OBB2のZ軸
+		/*Cross(obb[0].orientations[0], obb[1].orientations[0]),
+		Cross(obb[0].orientations[0], obb[1].orientations[1]),
+		Cross(obb[0].orientations[0], obb[1].orientations[2]),
+		Cross(obb[0].orientations[1], obb[1].orientations[0]),
+		Cross(obb[0].orientations[1], obb[1].orientations[1]),
+		Cross(obb[0].orientations[1], obb[1].orientations[2]),
+		Cross(obb[0].orientations[2], obb[1].orientations[0]),
+		Cross(obb[0].orientations[2], obb[1].orientations[1]),
+		Cross(obb[0].orientations[2], obb[1].orientations[2]),*/
+	};
+
+
+
+	// OBB1とOBB2の各軸の外積を求める
+	for (int32_t i = 0; i < 3; ++i)
+	{
+		for (int32_t j = 0; j < 3; ++j)
+		{
+			 auto v = Cross(obb[0].orientations[i], obb[1].orientations[j]);
+			 if (Length(v) < 1e-6f)
+			 {
+				 continue;	// 長さが0に近い場合は無視
+			 }
+			 axis[6 + i * 3 + j] = Normalize(v);
+		}
+	}
+
+	Vector3 vertices[2][8];
+	const size_t projSize = 8;
+
+	// OBBの各頂点を求める
+	for (int32_t index = 0; index < 2; index++)
+	{
+		Matrix4x4 obbWorldMatrix =
+		{
+			obb[index].orientations[0].x, obb[index].orientations[1].x, obb[index].orientations[2].x, 0.0f,
+			obb[index].orientations[0].y, obb[index].orientations[1].y, obb[index].orientations[2].y, 0.0f,
+			obb[index].orientations[0].z, obb[index].orientations[1].z, obb[index].orientations[2].z, 0.0f,
+			obb[index].center.x,		  obb[index].center.y,		    obb[index].center.z,		  1.0f
+		};
+
+		AABB aabbOBBLocal
+		{
+			.min = { -obb[index].size.x, -obb[index].size.y, -obb[index].size.z },
+			.max = obb[index].size,
+		};
+
+		Vector3 verticesAABB[8];
+		// AABBの8頂点を計算
+		verticesAABB[0] = { aabbOBBLocal.min.x, aabbOBBLocal.min.y, aabbOBBLocal.min.z };
+		verticesAABB[1] = { aabbOBBLocal.max.x, aabbOBBLocal.min.y, aabbOBBLocal.min.z };
+		verticesAABB[2] = { aabbOBBLocal.max.x, aabbOBBLocal.max.y, aabbOBBLocal.min.z };
+		verticesAABB[3] = { aabbOBBLocal.min.x, aabbOBBLocal.max.y, aabbOBBLocal.min.z };
+		verticesAABB[4] = { aabbOBBLocal.min.x, aabbOBBLocal.min.y, aabbOBBLocal.max.z };
+		verticesAABB[5] = { aabbOBBLocal.max.x, aabbOBBLocal.min.y, aabbOBBLocal.max.z };
+		verticesAABB[6] = { aabbOBBLocal.max.x, aabbOBBLocal.max.y, aabbOBBLocal.max.z };
+		verticesAABB[7] = { aabbOBBLocal.min.x, aabbOBBLocal.max.y, aabbOBBLocal.max.z };
+		
+		for (int32_t vertexNum = 0; vertexNum < 8; ++vertexNum)
+		{
+			// OBBのワールド座標系に変換
+			vertices[index][vertexNum] = Transform(verticesAABB[vertexNum], obbWorldMatrix);
+		}
+	}
+	
+	for (int32_t axisNum = 0; axisNum < 15; ++axisNum)
+	{
+		float L[2], min[2], max[2];
+
+		std::vector<float> projection(projSize);	// 投影結果（最大最小を求めやすくするためstd::vector）
+		// 各OBBの頂点を投影する
+		for (int32_t index = 0; index < 2; ++index)
+		{
+			for (int32_t vertexNum = 0; vertexNum < 8; ++vertexNum)
+			{
+				projection[vertexNum] = Dot(vertices[index][vertexNum], axis[axisNum]);
+			}
+
+			// 最小値と最大値を求める
+			auto it_max = std::max_element(projection.begin(), projection.end());
+			max[index] = (it_max != projection.end()) ? *it_max : 0.0f;
+			auto it_min = std::min_element(projection.begin(), projection.end());
+			min[index] = (it_min != projection.end()) ? *it_min : 0.0f;
+			L[index] = max[index] - min[index];
+		}
+
+		float sumSpan = L[0] + L[1];	// 2つのOBBの投影の長さの和
+		float longSpan = (std::max)(max[0], max[1]) - (std::min)(min[0], min[1]);	// 2つのOBBの投影の長さの差)
+		if (sumSpan <= longSpan) 
+		{
+			// 投影の長さの和が投影の長さの差よりも大きい場合、衝突していない
+			return false;
+		}
+	}
+
+	// すべての軸で衝突している場合、衝突している
+	return true;
+}
+
 // Windowsアプリでのエントリーポイント(main関数)
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
@@ -1212,8 +1322,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 	char keys[256] = { 0 };
 	char preKeys[256] = { 0 };
 
-	Vector3 rotateOBB{ 0.0f, 0.0f, 0.0f };
-	OBB obb{
+	Vector3 rotateOBB1{ 0.0f, 0.0f, 0.0f };
+	OBB obb1{
 		.center {-1.0f, 0.0f, 0.0f},
 		.orientations =
 		{
@@ -1221,15 +1331,20 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 			{ 0.0f, 1.0f, 0.0f },	// Y軸
 			{ 0.0f, 0.0f, 1.0f }	// Z軸
 		},
-		.size { 0.5f, 0.5f, 0.5f }
+		.size { 0.83f, 0.26f, 0.24f }
 	};
 
-	Segment segment
-	{
-		.origin{ -0.8f, -0.3f, 0.0f },
-		.diff{ 0.5f, 0.5f,0.5f }
+	Vector3 rotateOBB2{ -0.05f, -2.49f, 0.15f };
+	OBB obb2{
+		.center {0.9f, 0.66f, 0.78f},
+		.orientations =
+		{
+			{ 1.0f, 0.0f, 0.0f },	// X軸
+			{ 0.0f, 1.0f, 0.0f },	// Y軸
+			{ 0.0f, 0.0f, 1.0f }	// Z軸
+		},
+		.size { 0.5f, 0.37f, 0.5f }
 	};
-
 	
 
 	Vector3 cameraPos{ 0.0f, 0.0f, 0.0f };
@@ -1271,21 +1386,38 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		///
 
 		// 回転行列を生成
-		Matrix4x4 rotateMatrix = Multiply(MakeRotateXMatrix(rotateOBB.x),
-			Multiply(MakeRotateYMatrix(rotateOBB.y), MakeRotateZMatrix(rotateOBB.z)));
+		Matrix4x4 rotateMatrix1 = Multiply(MakeRotateXMatrix(rotateOBB1.x),
+			Multiply(MakeRotateYMatrix(rotateOBB1.y), MakeRotateZMatrix(rotateOBB1.z)));
+
+		// 回転行列を生成
+		Matrix4x4 rotateMatrix2 = Multiply(MakeRotateXMatrix(rotateOBB2.x),
+			Multiply(MakeRotateYMatrix(rotateOBB2.y), MakeRotateZMatrix(rotateOBB2.z)));
 
 		// 回転行列から軸を抽出
-		obb.orientations[0].x = rotateMatrix.m[0][0];
-		obb.orientations[0].y = rotateMatrix.m[0][1];
-		obb.orientations[0].z = rotateMatrix.m[0][2];
+		obb1.orientations[0].x = rotateMatrix1.m[0][0];
+		obb1.orientations[0].y = rotateMatrix1.m[0][1];
+		obb1.orientations[0].z = rotateMatrix1.m[0][2];
 
-		obb.orientations[1].x = rotateMatrix.m[1][0];
-		obb.orientations[1].y = rotateMatrix.m[1][1];
-		obb.orientations[1].z = rotateMatrix.m[1][2];
+		obb1.orientations[1].x = rotateMatrix1.m[1][0];
+		obb1.orientations[1].y = rotateMatrix1.m[1][1];
+		obb1.orientations[1].z = rotateMatrix1.m[1][2];
 
-		obb.orientations[2].x = rotateMatrix.m[2][0];
-		obb.orientations[2].y = rotateMatrix.m[2][1];
-		obb.orientations[2].z = rotateMatrix.m[2][2];
+		obb1.orientations[2].x = rotateMatrix1.m[2][0];
+		obb1.orientations[2].y = rotateMatrix1.m[2][1];
+		obb1.orientations[2].z = rotateMatrix1.m[2][2];
+
+		// 回転行列から軸を抽出
+		obb2.orientations[0].x = rotateMatrix2.m[0][0];
+		obb2.orientations[0].y = rotateMatrix2.m[0][1];
+		obb2.orientations[0].z = rotateMatrix2.m[0][2];
+
+		obb2.orientations[1].x = rotateMatrix2.m[1][0];
+		obb2.orientations[1].y = rotateMatrix2.m[1][1];
+		obb2.orientations[1].z = rotateMatrix2.m[1][2];
+
+		obb2.orientations[2].x = rotateMatrix2.m[2][0];
+		obb2.orientations[2].y = rotateMatrix2.m[2][1];
+		obb2.orientations[2].z = rotateMatrix2.m[2][2];
 
 
 		if (Novice::IsPressMouse(2) && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow))
@@ -1325,16 +1457,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 		cameraTranslate.z = radius * std::cos(theta) * std::cos(phi);
 
 		ImGui::Begin("Window");
-		ImGui::DragFloat3("obb.center", &obb.center.x, 0.01f);
-		ImGui::DragFloat("rotateOBB.x", &rotateOBB.x, 1.0f / 180.0f * static_cast<float>(M_PI));
-		ImGui::DragFloat("rotateOBB.y", &rotateOBB.y, 1.0f / 180.0f * static_cast<float>(M_PI));
-		ImGui::DragFloat("rotateOBB.z", &rotateOBB.z, 1.0f / 180.0f * static_cast<float>(M_PI));
-		ImGui::InputFloat3("obb.orientations[0]", &obb.orientations[0].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
-		ImGui::InputFloat3("obb.orientations[1]", &obb.orientations[1].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
-		ImGui::InputFloat3("obb.orientations[2]", &obb.orientations[2].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
-		ImGui::DragFloat3("obb.size", &obb.size.x, 0.01f);
-		ImGui::DragFloat3("segment.origin", &segment.origin.x, 0.01f);
-		ImGui::DragFloat3("segment.diff", &segment.diff.x, 0.01f);
+		ImGui::DragFloat3("obb1.center", &obb1.center.x, 0.01f);
+		ImGui::DragFloat3("obb1.size", &obb1.size.x, 0.01f);
+		ImGui::DragFloat("rotateOBB1.x", &rotateOBB1.x, 1.0f / 180.0f * static_cast<float>(M_PI));
+		ImGui::DragFloat("rotateOBB1.y", &rotateOBB1.y, 1.0f / 180.0f * static_cast<float>(M_PI));
+		ImGui::DragFloat("rotateOBB1.z", &rotateOBB1.z, 1.0f / 180.0f * static_cast<float>(M_PI));
+		ImGui::InputFloat3("obb1.orientations[0]", &obb1.orientations[0].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
+		ImGui::InputFloat3("obb1.orientations[1]", &obb1.orientations[1].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
+		ImGui::InputFloat3("obb1.orientations[2]", &obb1.orientations[2].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
+		ImGui::DragFloat3("obb2.center", &obb2.center.x, 0.01f);
+		ImGui::DragFloat3("obb2.size", &obb2.size.x, 0.01f);
+		ImGui::DragFloat("rotateOBB2.x", &rotateOBB2.x, 1.0f / 180.0f * static_cast<float>(M_PI));
+		ImGui::DragFloat("rotateOBB2.y", &rotateOBB2.y, 1.0f / 180.0f * static_cast<float>(M_PI));
+		ImGui::DragFloat("rotateOBB2.z", &rotateOBB2.z, 1.0f / 180.0f * static_cast<float>(M_PI));
+		ImGui::InputFloat3("obb2.orientations[0]", &obb2.orientations[0].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
+		ImGui::InputFloat3("obb2.orientations[1]", &obb2.orientations[1].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
+		ImGui::InputFloat3("obb2.orientations[2]", &obb2.orientations[2].x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::InputFloat3("CameraRotate", &cameraRotate.x, "%.3f", ImGuiInputTextFlags_ReadOnly);
 		ImGui::End();
 
@@ -1365,15 +1503,15 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 		DrawGrid(viewProjectionMatrix, viewportMatrix);
 		
-		DrawSegment(segment, viewProjectionMatrix, viewportMatrix, WHITE);
+		DrawOBB(obb2, viewProjectionMatrix, viewportMatrix, WHITE);
 
-		if (IsCollision(obb, segment)) 
+		if (IsCollision({ obb1, obb2 }))
 		{
-			DrawOBB(obb, viewProjectionMatrix, viewportMatrix, RED);
+			DrawOBB(obb1, viewProjectionMatrix, viewportMatrix, RED);
 		}
 		else
 		{
-			DrawOBB(obb, viewProjectionMatrix, viewportMatrix, WHITE);
+			DrawOBB(obb1, viewProjectionMatrix, viewportMatrix, WHITE);
 		}
 
 
